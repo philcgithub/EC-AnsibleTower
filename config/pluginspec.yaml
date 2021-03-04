@@ -1,0 +1,54 @@
+pluginInfo:
+  # This is default sample specification
+  # Feel free to change it
+  # Call pdk showdoc pluginspec to see the list of available fields and their description
+  pluginName: 'EC-AnsibleTower'
+  version: '1.0.0'
+  description: 'Integrates with Ansible Tower'
+  author: 'Phil Cherry'
+  supportUrl: 'none'
+  category: 'Resource Management'
+  shell: 'ec-groovy'
+
+# REST-backed plugin configuration
+configuration:
+  checkConnection: true
+  restConfigInfo:
+    endpointLabel: 'Ansible Tower Server'
+    checkConnectionUri: '/api/v2/me/'
+    headers:
+      Accept: 'application/json'
+    authSchemes:
+      bearer:
+        passwordLabel: 'Bearer token'
+        description: 'Token to connect to...'
+      oauth1:
+        tokenLabel: 'OAuth1 Token'
+        signatureMethod: 'RSA-SHA1'
+      basic:
+        userNameLabel: 'Username'
+        passwordLabel: 'Password'
+        description: 'Username and password to connect to ...'
+  hasProxySupport: true
+  hasDebugLevel: true
+
+procedures:
+-
+  name: 'Launch a Job Template'
+  description: 'This procedure launches a Job Template'
+  hasConfig: true
+  shell: 'ec-groovy'
+  parameters:
+  -
+    name: id
+    documentation: id of the Job Template to launch
+    required: true
+    type: entry
+    label: Job Template id
+    restParamInfo:
+      in: path
+  # Connects REST endpoint to the plugin procedure
+  restProcedureInfo:
+    url: '/api/v2/job_templates/{{id}}/launch/'
+    methodName: 'launchJobTemplate'
+    httpMethod: 'POST'

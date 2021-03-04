@@ -1,0 +1,13 @@
+<plugin>
+  <key>EC-AnsibleTower</key>
+  <label>EC-AnsibleTower</label>
+  <author>Phil Cherry</author>
+  <category>Resource Management</category>
+  <description>Integrates with Ansible Tower</description>
+  <configure>ec_config</configure>
+  <version>1.0.0.0</version>
+  <authorUrl>none</authorUrl>
+  <help>help.xml</help>
+  <depends min='1.4.1'>EC-PluginManager</depends>
+  <commander-version min='6.0' />
+</plugin>
