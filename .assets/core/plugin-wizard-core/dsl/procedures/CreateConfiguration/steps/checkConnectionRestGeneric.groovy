@@ -1,5 +1,4 @@
-
-// DO NOT EDIT THIS BLOCK BELOW=== check_connection starts ===
+// === check_connection template ===
 import groovy.json.JsonSlurper
 import com.electriccloud.client.groovy.ElectricFlow
 import groovyx.net.http.HTTPBuilder
@@ -8,8 +7,20 @@ import static groovyx.net.http.ContentType.TEXT
 import static groovyx.net.http.ContentType.JSON
 import org.apache.http.auth.*
 
+{% if oauth1 %}
+@Grab(group='com.google.gdata', module='core', version='1.47.1')
+@Grab(group='org.bouncycastle', module='bcprov-jdk16', version = '1.45')
+import java.security.KeyFactory
+import java.security.PrivateKey
+import java.security.spec.PKCS8EncodedKeySpec
+import com.google.gdata.client.authn.oauth.OAuthParameters
+import com.google.gdata.client.authn.oauth.OAuthRsaSha1Signer
+import com.google.gdata.client.authn.oauth.OAuthUtil
+import com.google.gdata.client.authn.oauth.RsaSha1PrivateKeyHelper
+{% endif %}
+
 def checkConnectionMetaString = '''
-{"authSchemes":{"bearerToken":{"checkConnectionUri":null,"prefix":null,"credentialName":"bearer_credential"},"basic":{"checkConnectionUri":null,"credentialName":"basic_credential"}},"checkConnectionUri":"/api/v2/me/","headers":{"Accept":"application/json"}}
+{{ checkConnectionMeta }}
 '''
 
 def checkConnectionMeta = new JsonSlurper().parseText(checkConnectionMetaString)
@@ -135,6 +146,34 @@ http.request(GET, TEXT) { req ->
       uriChanged = true
     }
   }
+  {% if oauth1 %}
+  if (authType == 'oauth1') {
+    println "OAuth1"
+    def meta = checkConnectionMeta?.authSchemes?.oauth1
+    if (meta.checkConnectionUri != null) {
+      uri.path = augmentUri(uri.path, meta.checkConnectionUri)
+      uriChanged = true
+      println "Check Connection URI: $uri"
+    }
+
+    // Needs to be here because it participates in the signature
+    if (checkConnectionMeta.checkConnectionUri != null && !uriChanged) {
+      uri.path = augmentUri(uri.path, checkConnectionMeta.checkConnectionUri)
+      println "Check Connection URI: $uri"
+      uriChanged = true
+    }
+
+    String credentialName = meta?.credentialName ?: 'oauth1_credential'
+    def cred = ef.getFullCredential(credentialName: credentialName)?.credential
+    def token = cred.userName
+    def privateKey = cred.password
+    def consumerKey = ef.getProperty(propertyName: 'oauth1ConsumerKey')?.property?.value
+    String signatureMethod = meta.signatureMethod
+    OAuthParameters params = oauthParams(endpoint, uri.path, privateKey, consumerKey, token, signatureMethod)
+    uri.query = params.baseParameters
+    println "query: $uri.query"
+  }
+  {% endif %}
 
   if (checkConnectionMeta.checkConnectionUri != null && !uriChanged) {
     uri.path = augmentUri(uri.path, checkConnectionMeta.checkConnectionUri)
@@ -185,4 +224,54 @@ def augmentUri(path, uri) {
     p = p.replaceAll(/\/+/, '/')
     return p
 }
-// DO NOT EDIT THIS BLOCK ABOVE ^^^=== check_connection ends, checksum: 1a17f16bbe128f099d8c2d7999933f3f ===
+
+{% if oauth1 %}
+static PrivateKey getPrivateKey(String pkcs8Lines) {
+    java.security.Security.addProvider(
+        new org.bouncycastle.jce.provider.BouncyCastleProvider()
+    );
+    String pkcs8Pem = pkcs8Lines.toString();
+    pkcs8Pem = pkcs8Pem.replaceAll(/-----[\w\s]+-----/, "");
+    pkcs8Pem = pkcs8Pem.replaceAll(/-----[\w\s]-----/, "");
+    pkcs8Pem = pkcs8Pem.replaceAll(/\s+/, "");
+    PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(pkcs8Pem.decodeBase64())
+    KeyFactory kf = KeyFactory.getInstance("RSA")
+    PrivateKey privKey = kf.generatePrivate(keySpec)
+    return privKey
+}
+
+static def oauthParams(String baseUrl,
+  String path,
+  String privateKey,
+  String consumerKey,
+  String token,
+  String signatureMethod) {
+  OAuthRsaSha1Signer rsaSigner = new OAuthRsaSha1Signer()
+
+  rsaSigner.setPrivateKey(getPrivateKey(privateKey))
+  OAuthParameters params = new OAuthParameters()
+  params.setOAuthConsumerKey(consumerKey)
+  params.setOAuthNonce(OAuthUtil.getNonce())
+  params.setOAuthTimestamp(OAuthUtil.getTimestamp())
+  params.setOAuthSignatureMethod(signatureMethod)
+  params.setOAuthType(OAuthParameters.OAuthType.TWO_LEGGED_OAUTH)
+  params.setOAuthToken(token)
+
+
+  def cleanPath = path.replaceAll(/\?.+$/, '')
+  // TODO process query in path
+  String paramString = params.getBaseParameters().sort().collect{it}.join('&')
+
+  String baseString = [
+      OAuthUtil.encode("GET"),
+      OAuthUtil.encode(baseUrl + cleanPath),
+      OAuthUtil.encode(paramString)
+  ].join('&')
+
+  String signature = rsaSigner.getSignature(baseString, params);
+  params.addCustomBaseParameter("oauth_signature", signature);
+  return params
+}
+{% endif %}
+
+// === check_connection template ends ===

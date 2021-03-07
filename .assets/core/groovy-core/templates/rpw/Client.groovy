@@ -1,4 +1,5 @@
-// DO NOT EDIT THIS BLOCK BELOW=== rest client imports starts ===
+// === rest client imports starts ===
+// === rest client imports template ===
 import com.cloudbees.flowpdf.*
 import com.cloudbees.flowpdf.client.HTTPRequest
 import com.cloudbees.flowpdf.client.REST
@@ -14,13 +15,18 @@ import org.apache.http.HttpResponse
 import sun.reflect.generics.reflectiveObjects.NotImplementedException
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
-// DO NOT EDIT THIS BLOCK ABOVE ^^^=== rest client imports ends, checksum: bd43b259ee4d532c8bd07cf2f708baba ===
+// === rest client imports template ends ===
+// === rest client imports ends ===
 // Place for the custom user imports, e.g. import groovy.xml.*
-// DO NOT EDIT THIS BLOCK BELOW=== rest client starts ===
+// === rest client starts ===
+// === rest client template ===
+
+
 @InheritConstructors
 class InvalidRestClientException extends Exception {
 
 }
+
 
 class ProxyConfig {
     String url
@@ -28,12 +34,14 @@ class ProxyConfig {
     String password
 }
 
-class ECAnsibleTowerRESTClient {
 
-    private static String BEARER_PREFIX = 'Bearer'
-    private static String USER_AGENT = 'ECAnsibleTowerRESTClient REST Client'
-    private static String CONTENT_TYPE = 'application/json'
-    private static OAUTH1_SIGNATURE_METHOD = 'RSA-SHA1'
+class {{restClassName}} {
+
+
+    private static String BEARER_PREFIX = '{% if rest.bearerPrefix %}{{rest.bearerPrefix}}{% else %}Bearer{% endif %}'
+    private static String USER_AGENT = '{% if rest.userAgent %}{{rest.userAgent}}{% else %}{{restClassName}} REST Client{% endif %}'
+    private static String CONTENT_TYPE = '{% if rest.contentType %}{{rest.contentType}}{% else %}application/json{% endif %}'
+    private static OAUTH1_SIGNATURE_METHOD = '{% if rest.oauthSignatureMethod %}{{rest.oauthSignatureMethod}}{% else %}RSA-SHA1{% endif %}'
 
     String endpoint
     String method
@@ -43,17 +51,17 @@ class ECAnsibleTowerRESTClient {
     private REST rest
     private ProxyConfig proxyConfig
 
-    ECAnsibleTowerRESTClient(String endpoint, RESTConfig restConfig, FlowPlugin plugin) {
+    {{restClassName}}(String endpoint, RESTConfig restConfig, FlowPlugin plugin) {
         this.endpoint = endpoint
         this.log = plugin.log
         this.rest = new REST(restConfig)
     }
 
     /**
-     * Will create a ECAnsibleTowerRESTClient object from the plugin Config object.
+     * Will create a {{restClassName}} object from the plugin Config object.
      * Convenient as it can use pre-defined configuration fields.
      */
-    static ECAnsibleTowerRESTClient fromConfig(Config config, FlowPlugin plugin) {
+    static {{restClassName}} fromConfig(Config config, FlowPlugin plugin) {
         Map params = [:]
         String endpoint = config.getRequiredParameter('endpoint').value.toString()
         Log log = plugin.log
@@ -84,10 +92,10 @@ class ECAnsibleTowerRESTClient {
                 log.debug "Using proxy authorization"
             }
         }
-        return new ECAnsibleTowerRESTClient(endpoint, restConfig, plugin)
+        return new {{restClassName}}(endpoint, restConfig, plugin)
     }
 
-    // Handles templates like , taking values from the params
+    // Handles templates like {{ value }}, taking values from the params
     private static String renderOneLineTemplate(String uri, Map params) {
         for(String key in params.keySet()) {
             Object value = params.get(key)
@@ -100,6 +108,7 @@ class ECAnsibleTowerRESTClient {
         }
         return uri
     }
+
 
     /**
      * This is the main request method
@@ -232,144 +241,68 @@ class ECAnsibleTowerRESTClient {
         return retval
     }
 
-    /** Generated code for the endpoint /api/v2/job_templates/
+    {% for endpoint in rest.endpoints %}
+
+    /** Generated code for the endpoint {{endpoint.urlTemplate}}
     * Do not change this code
+    {%- for p in endpoint.parameters %}
+    * {{p.parameterName}}: in {{p.placement}}
+    {%- endfor %}
     */
-    def listJobTemplates(Map<String, Object> params) {
-        this.method = 'listJobTemplates'
+    def {{endpoint.methodName}}(Map<String, Object> params) {
+        this.method = '{{endpoint.methodName}}'
         this.methodParameters = params
 
-        String uri = '/api/v2/job_templates/'
+        String uri = '{{endpoint.urlTemplate}}'
         log.debug("URI template $uri")
         uri = renderOneLineTemplate(uri, params)
 
         Map query = [:]
-
+        {% for p in endpoint.parameters %}
+        {% if p.placement == 'query' %}
+        query.put('{{p.parameterName}}', params.get('{{p.parameterName}}'))
+        {% endif %}
+        {% endfor %}
         log.debug "Query: ${query}"
 
         Object payload
-
-        String jsonTemplate = ''''''
+        {%- for p in endpoint.parameters %}
+        {%- if p.placement == 'body' %}
+        {%- set isMap = "true" %}
+        {#- the object must be initialized, but it also may be a List #}
+        {%- endif %}
+        {%- endfor %}
+        {% if isMap %}payload = [:]{%- endif %}
+        {% for p in endpoint.parameters %}
+        {% if p.placement == 'raw body' %}
+        payload = new JsonSlurper().parseText(params.get('{{p.parameterName}}'))
+        log.debug "Raw body payload: $payload"
+        {% endif %}
+        {% if p.placement == 'body' %}
+        payload.put('{{p.parameterName}}', params.get('{{p.parameterName}}'))
+        {% endif %}
+        {% endfor %}
+        String jsonTemplate = '''{{endpoint.jsonTemplate}}'''
         if (jsonTemplate) {
             payload = payloadFromTemplate(jsonTemplate, params)
             log.debug("Payload from template: $payload")
         }
         //TODO clean empty fields
         Map headers = [:]
-        return makeRequest('GET', uri, query, payload, headers)
+        {%- for p in endpoint.parameters %}
+        {%- if p.placement == 'header' %}
+        headers.put('{{p.parameterName}}', params.get('{{p.parameterName}}'))
+        {%- endif %}
+        {%- endfor %}
+        {%- for headerName, headerValue in endpoint.headers %}
+        headers.put('{{headerName}}', renderOneLineTemplate('{{headerValue}}', params))
+        {%- endfor %}
+        return makeRequest('{{endpoint.HTTPMethod}}', uri, query, payload, headers)
     }
+{% endfor %}
 
-    /** Generated code for the endpoint /api/v2/job_templates/{{id}}/
-    * Do not change this code
-    * id: in path
-    */
-    def getJobTemplate(Map<String, Object> params) {
-        this.method = 'getJobTemplate'
-        this.methodParameters = params
-
-        String uri = '/api/v2/job_templates/{{id}}/'
-        log.debug("URI template $uri")
-        uri = renderOneLineTemplate(uri, params)
-
-        Map query = [:]
-
-        log.debug "Query: ${query}"
-
-        Object payload
-
-        String jsonTemplate = ''''''
-        if (jsonTemplate) {
-            payload = payloadFromTemplate(jsonTemplate, params)
-            log.debug("Payload from template: $payload")
-        }
-        //TODO clean empty fields
-        Map headers = [:]
-        return makeRequest('GET', uri, query, payload, headers)
-    }
-
-    /** Generated code for the endpoint /api/v2/job_templates/{{id}}/launch/
-    * Do not change this code
-    * id: in path
-    */
-    def launchJobTemplate(Map<String, Object> params) {
-        this.method = 'launchJobTemplate'
-        this.methodParameters = params
-
-        String uri = '/api/v2/job_templates/{{id}}/launch/'
-        log.debug("URI template $uri")
-        uri = renderOneLineTemplate(uri, params)
-
-        Map query = [:]
-
-        log.debug "Query: ${query}"
-
-        Object payload
-
-        String jsonTemplate = ''''''
-        if (jsonTemplate) {
-            payload = payloadFromTemplate(jsonTemplate, params)
-            log.debug("Payload from template: $payload")
-        }
-        //TODO clean empty fields
-        Map headers = [:]
-        return makeRequest('POST', uri, query, payload, headers)
-    }
-
-    /** Generated code for the endpoint /api/v2/inventories/
-    * Do not change this code
-    */
-    def listInventories(Map<String, Object> params) {
-        this.method = 'listInventories'
-        this.methodParameters = params
-
-        String uri = '/api/v2/inventories/'
-        log.debug("URI template $uri")
-        uri = renderOneLineTemplate(uri, params)
-
-        Map query = [:]
-
-        log.debug "Query: ${query}"
-
-        Object payload
-
-        String jsonTemplate = ''''''
-        if (jsonTemplate) {
-            payload = payloadFromTemplate(jsonTemplate, params)
-            log.debug("Payload from template: $payload")
-        }
-        //TODO clean empty fields
-        Map headers = [:]
-        return makeRequest('GET', uri, query, payload, headers)
-    }
-
-    /** Generated code for the endpoint /api/v2/inventories/{{id}}/
-    * Do not change this code
-    * id: in path
-    */
-    def getInventory(Map<String, Object> params) {
-        this.method = 'getInventory'
-        this.methodParameters = params
-
-        String uri = '/api/v2/inventories/{{id}}/'
-        log.debug("URI template $uri")
-        uri = renderOneLineTemplate(uri, params)
-
-        Map query = [:]
-
-        log.debug "Query: ${query}"
-
-        Object payload
-
-        String jsonTemplate = ''''''
-        if (jsonTemplate) {
-            payload = payloadFromTemplate(jsonTemplate, params)
-            log.debug("Payload from template: $payload")
-        }
-        //TODO clean empty fields
-        Map headers = [:]
-        return makeRequest('GET', uri, query, payload, headers)
-    }
-// DO NOT EDIT THIS BLOCK ABOVE ^^^=== rest client ends, checksum: 06ef0681e2b2584346f9288b704ea4cd ===
+// === rest client template ends ===
+// === rest client ends ===
     /**
      * Use this method for any request pre-processing: adding custom headers, binary files, etc.
      */
@@ -402,3 +335,4 @@ class ECAnsibleTowerRESTClient {
     }
 
 }
+
